@@ -40,7 +40,6 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const http_1 = __importDefault(require("http"));
 const server_1 = __importStar(require("./platforms/server"));
-require("./platforms/telegram");
 const PORT = process.env.PORT ?? 3001;
 const server = http_1.default.createServer(server_1.default);
 (0, server_1.attachWebSocket)(server);
