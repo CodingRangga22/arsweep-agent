@@ -63,27 +63,74 @@ app.post("/v1/x402/rugcheck", rugPullDetector);
 app.post("/v1/x402/planner", autoSweepPlanner);
 
 // ── Payment Proxy Route ───────────────────────────────────────────────────
+const SIGNATURE_POLL_INTERVAL_MS = 1500;
+const SIGNATURE_POLL_TIMEOUT_MS = 90_000;
+
+async function waitForSignatureConfirmation(
+  connection: import("@solana/web3.js").Connection,
+  signature: string,
+  timeoutMs: number = SIGNATURE_POLL_TIMEOUT_MS
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { value } = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+    const st = value[0];
+    if (st) {
+      if (st.err) throw new Error(`Transaction failed on-chain: ${JSON.stringify(st.err)}`);
+      if (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized") return;
+    }
+    await new Promise((r) => setTimeout(r, SIGNATURE_POLL_INTERVAL_MS));
+  }
+  throw new Error(
+    `Transaction was not confirmed in ${timeoutMs / 1000} seconds. Check signature ${signature} on Solana Explorer.`
+  );
+}
+
 app.post("/v1/payment/usdc", async (req, res) => {
-  const { fromWallet, amountUSDC, signedTx } = req.body;
+  const { fromWallet, amountUSDC, signedTx, blockhash, lastValidBlockHeight } = req.body;
   if (!fromWallet || !amountUSDC || !signedTx) {
     return res.status(400).json({ error: "Missing required fields" });
   }
+  const rpc = process.env.HELIUS_RPC_URL;
+  if (!rpc) {
+    return res.status(500).json({ error: "Server misconfigured: HELIUS_RPC_URL is not set" });
+  }
   try {
     const { Connection, VersionedTransaction, Transaction } = await import("@solana/web3.js");
-    const connection = new Connection(process.env.HELIUS_RPC_URL!);
-    
-    // Deserialize and send signed transaction from client
+    const connection = new Connection(rpc, "confirmed");
+
     const txBuffer = Buffer.from(signedTx, "base64");
+    const legacySendOpts = { skipPreflight: false, maxRetries: 5, preflightCommitment: "confirmed" as const };
+    const versionedSendOpts = { skipPreflight: true, maxRetries: 5 };
+
     let signature: string;
     try {
       const vtx = VersionedTransaction.deserialize(txBuffer);
-      signature = await connection.sendRawTransaction(vtx.serialize(), { skipPreflight: true, maxRetries: 3 });
+      signature = await connection.sendRawTransaction(vtx.serialize(), versionedSendOpts);
     } catch {
       const tx = Transaction.from(txBuffer);
-      signature = await connection.sendRawTransaction(tx.serialize());
+      signature = await connection.sendRawTransaction(tx.serialize(), legacySendOpts);
     }
-    
-    await connection.confirmTransaction(signature, "confirmed");
+
+    const hasLifetime =
+      typeof blockhash === "string" &&
+      blockhash.length > 0 &&
+      typeof lastValidBlockHeight === "number" &&
+      Number.isFinite(lastValidBlockHeight);
+
+    if (hasLifetime) {
+      try {
+        await connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          "confirmed"
+        );
+      } catch {
+        await waitForSignatureConfirmation(connection, signature);
+      }
+    } else {
+      await waitForSignatureConfirmation(connection, signature);
+    }
+
     return res.json({ success: true, signature });
   } catch (err) {
     return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
