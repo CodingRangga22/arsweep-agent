@@ -7,6 +7,7 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { facilitator } from "@payai/facilitator";
+import { callWithX402Payment } from "./paymentAgent";
 import {
   analyzeWallet,
   sweepReport,
@@ -149,6 +150,72 @@ app.post("/v1/x402/report", sweepReport);
 app.post("/v1/x402/roast", walletRoast);
 app.post("/v1/x402/rugcheck", rugPullDetector);
 app.post("/v1/x402/planner", autoSweepPlanner);
+
+// Premium proxy endpoints (frontend calls these, no x402 on the frontend)
+app.post("/v1/premium/analyze", async (req, res) => {
+  try {
+    const body = JSON.stringify(req.body ?? {});
+    const port = process.env.PORT ?? "3001";
+    const url = `http://127.0.0.1:${port}/v1/x402/analyze`;
+    const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+app.post("/v1/premium/report", async (req, res) => {
+  try {
+    const body = JSON.stringify(req.body ?? {});
+    const port = process.env.PORT ?? "3001";
+    const url = `http://127.0.0.1:${port}/v1/x402/report`;
+    const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+app.post("/v1/premium/roast", async (req, res) => {
+  try {
+    const body = JSON.stringify(req.body ?? {});
+    const port = process.env.PORT ?? "3001";
+    const url = `http://127.0.0.1:${port}/v1/x402/roast`;
+    const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+app.post("/v1/premium/rugcheck", async (req, res) => {
+  try {
+    const body = JSON.stringify(req.body ?? {});
+    const port = process.env.PORT ?? "3001";
+    const url = `http://127.0.0.1:${port}/v1/x402/rugcheck`;
+    const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+app.post("/v1/premium/planner", async (req, res) => {
+  try {
+    const body = JSON.stringify(req.body ?? {});
+    const port = process.env.PORT ?? "3001";
+    const url = `http://127.0.0.1:${port}/v1/x402/planner`;
+    const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
 
 export function attachWebSocket(server: any) {
   const wss = new WebSocketServer({ server, path: "/ws" });
