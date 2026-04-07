@@ -16,6 +16,8 @@ export async function verifyUsdcTransferToTreasury(
   treasuryPubkey: PublicKey,
   usdcMintPubkey: PublicKey
 ): Promise<VerifyUsdcResult> {
+  console.log("[usdcPaymentVerify] verifying signature", signature);
+
   const tx = await connection.getParsedTransaction(signature, {
     maxSupportedTransactionVersion: 0,
     commitment: "confirmed",
@@ -41,6 +43,10 @@ export async function verifyUsdcTransferToTreasury(
   const pre = tx.meta?.preTokenBalances ?? [];
   const post = tx.meta?.postTokenBalances ?? [];
 
+  console.log("[usdcPaymentVerify] filter mint", mintStr, "treasury owner", ownerStr);
+  console.log("[usdcPaymentVerify] preTokenBalances raw", JSON.stringify(pre, null, 2));
+  console.log("[usdcPaymentVerify] postTokenBalances raw", JSON.stringify(post, null, 2));
+
   const sumAtomic = (rows: typeof pre) => {
     let s = 0n;
     for (const b of rows) {
@@ -51,7 +57,15 @@ export async function verifyUsdcTransferToTreasury(
     return s;
   };
 
-  const delta = sumAtomic(post) - sumAtomic(pre);
+  const preSum = sumAtomic(pre);
+  const postSum = sumAtomic(post);
+  const delta = postSum - preSum;
+
+  console.log("[usdcPaymentVerify] preSum (treasury USDC atomic)", preSum.toString());
+  console.log("[usdcPaymentVerify] postSum (treasury USDC atomic)", postSum.toString());
+  console.log("[usdcPaymentVerify] delta (postSum - preSum)", delta.toString());
+  console.log("[usdcPaymentVerify] expectedMinAmountAtomic", expectedMinAmountAtomic.toString());
+
   if (delta < expectedMinAmountAtomic) {
     return {
       ok: false,
