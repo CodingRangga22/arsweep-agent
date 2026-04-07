@@ -36,41 +36,39 @@ async function handleX402<T>(
     resourceUrl
   );
 
-  // No payment — return 402 (spec-compliant manual response)
+  // No payment — 402 body must include facilitator feePayer (x402-solana client requires extra.feePayer)
   if (!paymentHeader) {
     res.setHeader("WWW-Authenticate", 'X-402 realm="Arsweep API"');
     return res.status(402).json({
       x402Version: 1,
-      accepts: [{
-        scheme: "exact",
-        network: "solana:mainnet",
-        maxAmountRequired: amount,
-        resource: resourceUrl,
-        description,
-        mimeType: "application/json",
-        payTo: TREASURY_ADDRESS,
-        maxTimeoutSeconds: 300,
-        asset: USDC_MINT,
-        inputSchema: {
-          type: "object",
-          properties: {
-            walletAddress: {
-              type: "string",
-              description: "Solana wallet address to analyze",
+      accepts: [
+        {
+          ...paymentRequirements,
+          maxAmountRequired: amount,
+          resource: resourceUrl,
+          description,
+          mimeType: "application/json",
+          inputSchema: {
+            type: "object",
+            properties: {
+              walletAddress: {
+                type: "string",
+                description: "Solana wallet address to analyze",
+              },
+            },
+            required: ["walletAddress"],
+          },
+          outputSchema: {
+            type: "object",
+            properties: {
+              walletAddress: { type: "string" },
+              emptyAccounts: { type: "number" },
+              estimatedReclaimableSOL: { type: "string" },
+              recommendation: { type: "string" },
             },
           },
-          required: ["walletAddress"],
         },
-        outputSchema: {
-          type: "object",
-          properties: {
-            walletAddress: { type: "string" },
-            emptyAccounts: { type: "number" },
-            estimatedReclaimableSOL: { type: "string" },
-            recommendation: { type: "string" },
-          },
-        },
-      }],
+      ],
       error: "X-PAYMENT header is required",
     });
   }
