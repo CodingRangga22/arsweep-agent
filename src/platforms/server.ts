@@ -77,7 +77,7 @@ app.post("/v1/payment/usdc", async (req, res) => {
     let signature: string;
     try {
       const vtx = VersionedTransaction.deserialize(txBuffer);
-      signature = await connection.sendRawTransaction(vtx.serialize());
+      signature = await connection.sendRawTransaction(vtx.serialize(), { skipPreflight: true, maxRetries: 3 });
     } catch {
       const tx = Transaction.from(txBuffer);
       signature = await connection.sendRawTransaction(tx.serialize());
