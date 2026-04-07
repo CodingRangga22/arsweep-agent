@@ -36,6 +36,8 @@ const corsOptions: cors.CorsOptions = {
     "payment-signature",
     "X-PAYMENT",
     "x-payment",
+    "X-Payment-Signature",
+    "x-payment-signature",
   ],
 };
 

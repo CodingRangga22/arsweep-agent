@@ -55,6 +55,8 @@ const corsOptions = {
         "payment-signature",
         "X-PAYMENT",
         "x-payment",
+        "X-Payment-Signature",
+        "x-payment-signature",
     ],
 };
 app.use((0, cors_1.default)(corsOptions));

@@ -44,91 +44,62 @@ exports.sweepReportGet = sweepReportGet;
 exports.walletRoastGet = walletRoastGet;
 exports.rugPullDetectorGet = rugPullDetectorGet;
 exports.autoSweepPlannerGet = autoSweepPlannerGet;
-const { X402PaymentHandler } = require("x402-solana/server");
+const web3_js_1 = require("@solana/web3.js");
+const usdcPaymentVerify_1 = require("./usdcPaymentVerify");
 const TREASURY_ADDRESS = "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
-const FACILITATOR_URL = "https://facilitator.payai.network";
-const BASE_URL = process.env.BASE_URL ?? "https://arsweep-agent.yourdomain.com";
-// USDC mainnet mint
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const x402 = new X402PaymentHandler({
-    network: "solana",
-    treasuryAddress: TREASURY_ADDRESS,
-    facilitatorUrl: FACILITATOR_URL,
-});
-// ── Helper ─────────────────────────────────────────────────────────────────
-async function handleX402(req, res, endpoint, amount, description, handler) {
-    const resourceUrl = `${BASE_URL}${endpoint}`;
-    const paymentHeader = x402.extractPayment(req.headers);
-    console.log("RAW paymentHeader:", JSON.stringify(paymentHeader?.substring(0, 50)));
-    const paymentRequirements = await x402.createPaymentRequirements({
-        amount,
-        asset: { address: USDC_MINT, decimals: 6 },
-        description,
-    }, resourceUrl);
-    // No payment — 402 body must include facilitator feePayer (x402-solana client requires extra.feePayer)
-    if (!paymentHeader) {
-        res.setHeader("WWW-Authenticate", 'X-402 realm="Arsweep API"');
-        return res.status(402).json({
-            x402Version: 1,
-            accepts: [
-                {
-                    ...paymentRequirements,
-                    maxAmountRequired: amount,
-                    resource: resourceUrl,
-                    description,
-                    mimeType: "application/json",
-                    inputSchema: {
-                        type: "object",
-                        properties: {
-                            walletAddress: {
-                                type: "string",
-                                description: "Solana wallet address to analyze",
-                            },
-                        },
-                        required: ["walletAddress"],
-                    },
-                    outputSchema: {
-                        type: "object",
-                        properties: {
-                            walletAddress: { type: "string" },
-                            emptyAccounts: { type: "number" },
-                            estimatedReclaimableSOL: { type: "string" },
-                            recommendation: { type: "string" },
-                        },
-                    },
-                },
-            ],
-            error: "X-PAYMENT header is required",
+function getTreasury() {
+    return new web3_js_1.PublicKey(process.env.TREASURY_WALLET ?? TREASURY_ADDRESS);
+}
+function getUsdcMint() {
+    return new web3_js_1.PublicKey(USDC_MINT);
+}
+/** Express normalizes header names to lowercase. */
+function extractPaymentSignature(req) {
+    const raw = req.headers["x-payment-signature"];
+    if (typeof raw === "string" && raw.trim())
+        return raw.trim();
+    if (Array.isArray(raw) && raw[0]?.trim())
+        return raw[0].trim();
+    return null;
+}
+async function withOnChainUsdcPayment(req, res, amountAtomic, handler) {
+    const rpc = process.env.HELIUS_RPC_URL;
+    if (!rpc) {
+        res.status(500).json({ error: "Server misconfigured: HELIUS_RPC_URL is not set" });
+        return;
+    }
+    const signature = extractPaymentSignature(req);
+    if (!signature) {
+        res.status(402).json({
+            error: "Payment required",
+            message: "POST /v1/payment/usdc with a signed USDC transfer, then retry with header X-Payment-Signature: <tx-signature>",
         });
+        return;
     }
-    // Verify payment
-    const verified = await x402.verifyPayment(paymentHeader, paymentRequirements);
-    if (!verified.isValid) {
-        console.error("Payment verification failed:", JSON.stringify(verified));
-        return res.status(402).json({ error: "Invalid payment", reason: verified.invalidReason });
+    const connection = new web3_js_1.Connection(rpc, "confirmed");
+    const verified = await (0, usdcPaymentVerify_1.verifyUsdcTransferToTreasury)(connection, signature, amountAtomic, getTreasury(), getUsdcMint());
+    if (!verified.ok) {
+        res.status(402).json({ error: "Invalid payment", reason: verified.reason });
+        return;
     }
-    // Execute business logic
     try {
         const result = await handler(req);
-        await x402.settlePayment(paymentHeader, paymentRequirements);
-        return res.json({ success: true, data: result });
+        res.json({ success: true, data: result });
     }
     catch (err) {
-        return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
 }
 // ── Endpoint 1: AI Wallet Analysis — $0.10 per scan ───────────────────────
 async function analyzeWallet(req, res) {
-    await handleX402(req, res, "/v1/x402/analyze", "100000", // $0.10 USDC (atomic units, 6 decimals)
-    "AI Wallet Analysis — Arsweep", async (req) => {
+    await withOnChainUsdcPayment(req, res, 100000n, async (req) => {
         const { walletAddress } = req.body;
         if (!walletAddress)
             throw new Error("walletAddress required");
-        // Import Helius & Groq from existing agent
-        const { Connection, PublicKey } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
-        const { TOKEN_PROGRAM_ID, getAccount } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
-        const connection = new Connection(process.env.HELIUS_RPC_URL);
-        const pubkey = new PublicKey(walletAddress);
+        const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
+        const connection = new web3_js_1.Connection(process.env.HELIUS_RPC_URL);
+        const pubkey = new web3_js_1.PublicKey(walletAddress);
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
             programId: TOKEN_PROGRAM_ID,
         });
@@ -152,15 +123,13 @@ async function analyzeWallet(req, res) {
 }
 // ── Endpoint 2: Bulk Sweep Report — $0.05 per report ──────────────────────
 async function sweepReport(req, res) {
-    await handleX402(req, res, "/v1/x402/report", "50000", // $0.05 USDC
-    "Wallet Sweep Report — Arsweep", async (req) => {
+    await withOnChainUsdcPayment(req, res, 50000n, async (req) => {
         const { walletAddress } = req.body;
         if (!walletAddress)
             throw new Error("walletAddress required");
-        const { Connection, PublicKey } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
         const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
-        const connection = new Connection(process.env.HELIUS_RPC_URL);
-        const pubkey = new PublicKey(walletAddress);
+        const connection = new web3_js_1.Connection(process.env.HELIUS_RPC_URL);
+        const pubkey = new web3_js_1.PublicKey(walletAddress);
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
             programId: TOKEN_PROGRAM_ID,
         });
@@ -180,7 +149,7 @@ async function sweepReport(req, res) {
                 totalReclaimableSOL: (emptyAccounts.length * 0.00203928).toFixed(5),
                 totalReclaimableUSD: (emptyAccounts.length * 0.00203928 * 130).toFixed(2),
             },
-            emptyAccountsList: emptyAccounts.slice(0, 20), // max 20
+            emptyAccountsList: emptyAccounts.slice(0, 20),
             generatedAt: new Date().toISOString(),
             sweepUrl: `https://arsweep.fun/dashboard?wallet=${walletAddress}`,
         };
@@ -191,35 +160,39 @@ async function x402Health(_req, res) {
     res.json({
         status: "ok",
         service: "arsweep-x402",
-        version: "1.0.0",
+        version: "2.0.0",
         endpoints: [
             { path: "/v1/x402/analyze", price: "$0.10 USDC", description: "AI Wallet Analysis" },
             { path: "/v1/x402/report", price: "$0.05 USDC", description: "Wallet Sweep Report" },
+            { path: "/v1/x402/roast", price: "$0.05 USDC", description: "Wallet Roast" },
+            { path: "/v1/x402/rugcheck", price: "$0.10 USDC", description: "Rug Pull Detector" },
+            { path: "/v1/x402/planner", price: "$0.05 USDC", description: "Auto-Sweep Planner" },
         ],
-        treasury: TREASURY_ADDRESS,
+        treasury: process.env.TREASURY_WALLET ?? TREASURY_ADDRESS,
         network: "solana",
-        paymentProtocol: "x402-v2",
+        paymentProtocol: "on-chain-usdc",
+        paymentHint: "POST /v1/payment/usdc then call premium routes with X-Payment-Signature: <signature>",
     });
 }
 // ── Endpoint 4: Wallet Roast — $0.05 ─────────────────────────────────────
 async function walletRoast(req, res) {
-    await handleX402(req, res, "/v1/x402/roast", "50000", "Wallet Roast — Arsweep", async (req) => {
+    await withOnChainUsdcPayment(req, res, 50000n, async (req) => {
         const { walletAddress } = req.body;
         if (!walletAddress)
             throw new Error("walletAddress required");
-        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
+        const { LAMPORTS_PER_SOL } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
         const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
-        const connection = new Connection(process.env.HELIUS_RPC_URL);
-        const pubkey = new PublicKey(walletAddress);
+        const connection = new web3_js_1.Connection(process.env.HELIUS_RPC_URL);
+        const pubkey = new web3_js_1.PublicKey(walletAddress);
         const [solBalance, tokenAccounts] = await Promise.all([
             connection.getBalance(pubkey),
             connection.getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID }),
         ]);
         const solSOL = solBalance / LAMPORTS_PER_SOL;
         const total = tokenAccounts.value.length;
-        const empty = tokenAccounts.value.filter(a => Number(a.account.data.parsed.info.tokenAmount.uiAmount) === 0).length;
+        const empty = tokenAccounts.value.filter((a) => Number(a.account.data.parsed.info.tokenAmount.uiAmount) === 0)
+            .length;
         const emptyRatio = total > 0 ? empty / total : 0;
-        // Score calculation
         let score = 100;
         if (solSOL < 0.01)
             score -= 30;
@@ -234,7 +207,6 @@ async function walletRoast(req, res) {
         if (total === 0)
             score -= 20;
         score = Math.max(0, Math.min(100, score));
-        // Roast based on score
         const roasts = {
             legendary: [
                 "Bro your wallet is cleaner than your room. Respect. 👑",
@@ -283,25 +255,23 @@ async function walletRoast(req, res) {
 }
 // ── Endpoint 5: Rug Pull Detector — $0.10 ────────────────────────────────
 async function rugPullDetector(req, res) {
-    await handleX402(req, res, "/v1/x402/rugcheck", "100000", "Rug Pull Detector — Arsweep", async (req) => {
+    await withOnChainUsdcPayment(req, res, 100000n, async (req) => {
         const { walletAddress } = req.body;
         if (!walletAddress)
             throw new Error("walletAddress required");
-        const { Connection, PublicKey } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
         const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
         const axios = (await Promise.resolve().then(() => __importStar(require("axios")))).default;
-        const connection = new Connection(process.env.HELIUS_RPC_URL);
-        const pubkey = new PublicKey(walletAddress);
+        const connection = new web3_js_1.Connection(process.env.HELIUS_RPC_URL);
+        const pubkey = new web3_js_1.PublicKey(walletAddress);
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
             programId: TOKEN_PROGRAM_ID,
         });
         const tokens = tokenAccounts.value
-            .filter(a => Number(a.account.data.parsed.info.tokenAmount.uiAmount) > 0)
-            .map(a => ({
+            .filter((a) => Number(a.account.data.parsed.info.tokenAmount.uiAmount) > 0)
+            .map((a) => ({
             mint: a.account.data.parsed.info.mint,
             balance: a.account.data.parsed.info.tokenAmount.uiAmount,
         }));
-        // Check each token via rugcheck.xyz API
         const results = await Promise.allSettled(tokens.slice(0, 10).map(async (token) => {
             try {
                 const res = await axios.get(`https://api.rugcheck.xyz/v1/tokens/${token.mint}/report/summary`, {
@@ -330,10 +300,10 @@ async function rugPullDetector(req, res) {
             }
         }));
         const analyzed = results
-            .filter(r => r.status === "fulfilled")
-            .map(r => r.value);
-        const dangerous = analyzed.filter(t => t.verdict.includes("DANGER"));
-        const caution = analyzed.filter(t => t.verdict.includes("CAUTION"));
+            .filter((r) => r.status === "fulfilled")
+            .map((r) => r.value);
+        const dangerous = analyzed.filter((t) => t.verdict.includes("DANGER"));
+        const caution = analyzed.filter((t) => t.verdict.includes("CAUTION"));
         return {
             walletAddress,
             summary: {
@@ -354,14 +324,14 @@ async function rugPullDetector(req, res) {
 }
 // ── Endpoint 6: Auto-Sweep Planner — $0.05 ───────────────────────────────
 async function autoSweepPlanner(req, res) {
-    await handleX402(req, res, "/v1/x402/planner", "50000", "Auto-Sweep Planner — Arsweep", async (req) => {
+    await withOnChainUsdcPayment(req, res, 50000n, async (req) => {
         const { walletAddress } = req.body;
         if (!walletAddress)
             throw new Error("walletAddress required");
-        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
+        const { LAMPORTS_PER_SOL } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
         const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
-        const connection = new Connection(process.env.HELIUS_RPC_URL);
-        const pubkey = new PublicKey(walletAddress);
+        const connection = new web3_js_1.Connection(process.env.HELIUS_RPC_URL);
+        const pubkey = new web3_js_1.PublicKey(walletAddress);
         const [solBalance, tokenAccounts] = await Promise.all([
             connection.getBalance(pubkey),
             connection.getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID }),
@@ -369,19 +339,18 @@ async function autoSweepPlanner(req, res) {
         const solSOL = solBalance / LAMPORTS_PER_SOL;
         const RENT = 0.00203928;
         const FEE = 0.015;
-        const accounts = tokenAccounts.value.map(a => ({
+        const accounts = tokenAccounts.value.map((a) => ({
             mint: a.account.data.parsed.info.mint,
             balance: Number(a.account.data.parsed.info.tokenAmount.uiAmount),
             isEmpty: Number(a.account.data.parsed.info.tokenAmount.uiAmount) === 0,
             rentDeposit: RENT,
         }));
-        const sweepable = accounts.filter(a => a.isEmpty);
-        const nonEmpty = accounts.filter(a => !a.isEmpty);
+        const sweepable = accounts.filter((a) => a.isEmpty);
+        const nonEmpty = accounts.filter((a) => !a.isEmpty);
         const grossSOL = sweepable.length * RENT;
         const feeSOL = grossSOL * FEE;
         const gasSOL = sweepable.length * 0.000005;
         const netSOL = grossSOL - feeSOL - gasSOL;
-        // Batch plan
         const batchSize = 10;
         const batches = [];
         for (let i = 0; i < sweepable.length; i += batchSize) {
