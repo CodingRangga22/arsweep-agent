@@ -9,7 +9,7 @@ const BASE_URL = process.env.BASE_URL ?? "https://arsweep-agent.yourdomain.com";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 const x402 = new X402PaymentHandler({
-  network: "solana",
+  network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
   treasuryAddress: TREASURY_ADDRESS,
   facilitatorUrl: FACILITATOR_URL,
 });
