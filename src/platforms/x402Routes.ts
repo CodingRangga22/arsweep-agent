@@ -42,7 +42,7 @@ async function handleX402<T>(
       x402Version: 1,
       accepts: [{
         scheme: "exact",
-        network: "eip155:8453",
+        network: "solana:mainnet",
         maxAmountRequired: amount,
         resource: resourceUrl,
         description,
