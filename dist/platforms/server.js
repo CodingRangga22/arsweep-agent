@@ -8,8 +8,14 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const ws_1 = require("ws");
 const router_1 = require("../router");
+const dotenv_1 = require("dotenv");
+const express_2 = require("@x402/express");
+const server_1 = require("@x402/svm/exact/server");
+const server_2 = require("@x402/core/server");
+const facilitator_1 = require("@payai/facilitator");
 const x402Routes_1 = require("./x402Routes");
 const apiRoutes_1 = require("./apiRoutes");
+(0, dotenv_1.config)();
 const app = (0, express_1.default)();
 /** x402 v2 client sends PAYMENT-SIGNATURE; v1 used X-PAYMENT — allow both for CORS preflight. */
 const corsOptions = {
@@ -38,6 +44,62 @@ const corsOptions = {
 };
 app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
+const TREASURY_WALLET = "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
+// PayAI docs: use @payai/facilitator + x402 middleware (no custom payment logic).
+const facilitatorClient = new server_2.HTTPFacilitatorClient(facilitator_1.facilitator);
+app.use((0, express_2.paymentMiddleware)({
+    "POST /v1/x402/analyze": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        description: "AI Wallet Analysis",
+        mimeType: "application/json",
+    },
+    "POST /v1/x402/report": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Wallet Sweep Report",
+        mimeType: "application/json",
+    },
+    "POST /v1/x402/roast": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Wallet Roast",
+        mimeType: "application/json",
+    },
+    "POST /v1/x402/rugcheck": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Rug Pull Detector",
+        mimeType: "application/json",
+    },
+    "POST /v1/x402/planner": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Auto-Sweep Planner",
+        mimeType: "application/json",
+    },
+    // GET variants (optional)
+    "GET /v1/x402/analyze": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        description: "AI Wallet Analysis",
+        mimeType: "application/json",
+    },
+    "GET /v1/x402/report": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Wallet Sweep Report",
+        mimeType: "application/json",
+    },
+    "GET /v1/x402/roast": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Wallet Roast",
+        mimeType: "application/json",
+    },
+    "GET /v1/x402/rugcheck": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Rug Pull Detector",
+        mimeType: "application/json",
+    },
+    "GET /v1/x402/planner": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        description: "Auto-Sweep Planner",
+        mimeType: "application/json",
+    },
+}, new express_2.x402ResourceServer(facilitatorClient).register("solana", new server_1.ExactSvmScheme())));
 app.post("/v1/agent/chat", async (req, res) => {
     const { userId, message, walletAddress, apiKey } = req.body;
     if (process.env.REQUIRE_API_KEY === "true" && apiKey !== process.env.ARSWEEP_API_KEY) {

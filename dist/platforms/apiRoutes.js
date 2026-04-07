@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyzeWalletFree = analyzeWalletFree;
 exports.sweepReportFree = sweepReportFree;
@@ -39,7 +6,7 @@ exports.walletRoastFree = walletRoastFree;
 exports.rugPullDetectorFree = rugPullDetectorFree;
 exports.autoSweepPlannerFree = autoSweepPlannerFree;
 async function getConnection() {
-    const { Connection } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
+    const { Connection } = await import("@solana/web3.js");
     return new Connection(process.env.HELIUS_RPC_URL);
 }
 // ── 1: Analyze Wallet ─────────────────────────────────────────────────────
@@ -48,8 +15,8 @@ async function analyzeWalletFree(req, res) {
         const { walletAddress } = req.body;
         if (!walletAddress)
             return res.status(400).json({ error: "walletAddress required" });
-        const { Connection, PublicKey } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
-        const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
+        const { Connection, PublicKey } = await import("@solana/web3.js");
+        const { TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
         const connection = new Connection(process.env.HELIUS_RPC_URL);
         const pubkey = new PublicKey(walletAddress);
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
@@ -83,8 +50,8 @@ async function sweepReportFree(req, res) {
         const { walletAddress } = req.body;
         if (!walletAddress)
             return res.status(400).json({ error: "walletAddress required" });
-        const { Connection, PublicKey } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
-        const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
+        const { Connection, PublicKey } = await import("@solana/web3.js");
+        const { TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
         const connection = new Connection(process.env.HELIUS_RPC_URL);
         const pubkey = new PublicKey(walletAddress);
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
@@ -122,8 +89,8 @@ async function walletRoastFree(req, res) {
         const { walletAddress } = req.body;
         if (!walletAddress)
             return res.status(400).json({ error: "walletAddress required" });
-        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
-        const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
+        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import("@solana/web3.js");
+        const { TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
         const connection = new Connection(process.env.HELIUS_RPC_URL);
         const pubkey = new PublicKey(walletAddress);
         const [solBalance, tokenAccounts] = await Promise.all([
@@ -177,9 +144,9 @@ async function rugPullDetectorFree(req, res) {
         const { walletAddress } = req.body;
         if (!walletAddress)
             return res.status(400).json({ error: "walletAddress required" });
-        const { Connection, PublicKey } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
-        const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
-        const axiosLib = (await Promise.resolve().then(() => __importStar(require("axios")))).default;
+        const { Connection, PublicKey } = await import("@solana/web3.js");
+        const { TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
+        const axiosLib = (await import("axios")).default;
         const connection = new Connection(process.env.HELIUS_RPC_URL);
         const pubkey = new PublicKey(walletAddress);
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
@@ -217,8 +184,8 @@ async function autoSweepPlannerFree(req, res) {
         const { walletAddress } = req.body;
         if (!walletAddress)
             return res.status(400).json({ error: "walletAddress required" });
-        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await Promise.resolve().then(() => __importStar(require("@solana/web3.js")));
-        const { TOKEN_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require("@solana/spl-token")));
+        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import("@solana/web3.js");
+        const { TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
         const connection = new Connection(process.env.HELIUS_RPC_URL);
         const pubkey = new PublicKey(walletAddress);
         const [solBalance, tokenAccounts] = await Promise.all([connection.getBalance(pubkey), connection.getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID })]);
