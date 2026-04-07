@@ -25,6 +25,7 @@ async function handleX402<T>(
 ) {
   const resourceUrl = `${BASE_URL}${endpoint}`;
   const paymentHeader = x402.extractPayment(req.headers);
+  console.log("RAW paymentHeader:", JSON.stringify(paymentHeader?.substring(0, 50)));
 
   const paymentRequirements = await x402.createPaymentRequirements(
     {
