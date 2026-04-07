@@ -62,6 +62,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 const TREASURY_WALLET = "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
+const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 
 // PayAI docs: use @payai/facilitator + x402 middleware (no custom payment logic).
 const facilitatorClient = new HTTPFacilitatorClient(facilitator);
@@ -69,58 +70,58 @@ app.use(
   paymentMiddleware(
     {
       "POST /v1/x402/analyze": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "AI Wallet Analysis",
         mimeType: "application/json",
       },
       "POST /v1/x402/report": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Sweep Report",
         mimeType: "application/json",
       },
       "POST /v1/x402/roast": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Roast",
         mimeType: "application/json",
       },
       "POST /v1/x402/rugcheck": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Rug Pull Detector",
         mimeType: "application/json",
       },
       "POST /v1/x402/planner": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Auto-Sweep Planner",
         mimeType: "application/json",
       },
       // GET variants (optional)
       "GET /v1/x402/analyze": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "AI Wallet Analysis",
         mimeType: "application/json",
       },
       "GET /v1/x402/report": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Sweep Report",
         mimeType: "application/json",
       },
       "GET /v1/x402/roast": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Roast",
         mimeType: "application/json",
       },
       "GET /v1/x402/rugcheck": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Rug Pull Detector",
         mimeType: "application/json",
       },
       "GET /v1/x402/planner": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Auto-Sweep Planner",
         mimeType: "application/json",
       },
     },
-    new x402ResourceServer(facilitatorClient).register("solana" as any, new ExactSvmScheme()),
+    new x402ResourceServer(facilitatorClient).register(SOLANA_MAINNET_CAIP2 as any, new ExactSvmScheme()),
   ),
 );
 
