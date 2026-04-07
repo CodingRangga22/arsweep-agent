@@ -4,7 +4,7 @@ import { WebSocketServer } from "ws";
 import { handleMessage } from "../router";
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: "*", allowedHeaders: ["Content-Type", "Authorization", "PAYMENT-SIGNATURE", "payment-signature"] }));
 app.use(express.json());
 
 app.post("/v1/agent/chat", async (req, res) => {
