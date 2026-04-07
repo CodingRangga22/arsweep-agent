@@ -77,6 +77,7 @@ async function handleX402<T>(
   // Verify payment
   const verified = await x402.verifyPayment(paymentHeader, paymentRequirements);
   if (!verified.isValid) {
+    console.error("Payment verification failed:", JSON.stringify(verified));
     return res.status(402).json({ error: "Invalid payment", reason: verified.invalidReason });
   }
 
