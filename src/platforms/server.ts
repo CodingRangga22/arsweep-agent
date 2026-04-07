@@ -2,6 +2,11 @@ import express from "express";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import { handleMessage } from "../router";
+import { config } from "dotenv";
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { ExactSvmScheme } from "@x402/svm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+import { facilitator } from "@payai/facilitator";
 import {
   analyzeWallet,
   sweepReport,
@@ -22,6 +27,8 @@ import {
   rugPullDetectorFree,
   autoSweepPlannerFree,
 } from "./apiRoutes";
+
+config();
 
 const app = express();
 
@@ -53,6 +60,69 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+const TREASURY_WALLET = "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
+
+// PayAI docs: use @payai/facilitator + x402 middleware (no custom payment logic).
+const facilitatorClient = new HTTPFacilitatorClient(facilitator);
+app.use(
+  paymentMiddleware(
+    {
+      "POST /v1/x402/analyze": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "AI Wallet Analysis",
+        mimeType: "application/json",
+      },
+      "POST /v1/x402/report": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Wallet Sweep Report",
+        mimeType: "application/json",
+      },
+      "POST /v1/x402/roast": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Wallet Roast",
+        mimeType: "application/json",
+      },
+      "POST /v1/x402/rugcheck": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Rug Pull Detector",
+        mimeType: "application/json",
+      },
+      "POST /v1/x402/planner": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Auto-Sweep Planner",
+        mimeType: "application/json",
+      },
+      // GET variants (optional)
+      "GET /v1/x402/analyze": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "AI Wallet Analysis",
+        mimeType: "application/json",
+      },
+      "GET /v1/x402/report": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Wallet Sweep Report",
+        mimeType: "application/json",
+      },
+      "GET /v1/x402/roast": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Wallet Roast",
+        mimeType: "application/json",
+      },
+      "GET /v1/x402/rugcheck": {
+        accepts: [{ scheme: "exact", price: "$0.10", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Rug Pull Detector",
+        mimeType: "application/json",
+      },
+      "GET /v1/x402/planner": {
+        accepts: [{ scheme: "exact", price: "$0.05", network: "solana" as any, payTo: TREASURY_WALLET }],
+        description: "Auto-Sweep Planner",
+        mimeType: "application/json",
+      },
+    },
+    new x402ResourceServer(facilitatorClient).register("solana" as any, new ExactSvmScheme()),
+  ),
+);
 
 app.post("/v1/agent/chat", async (req, res) => {
   const { userId, message, walletAddress, apiKey } = req.body;
