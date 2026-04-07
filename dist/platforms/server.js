@@ -41,8 +41,23 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const ws_1 = require("ws");
 const router_1 = require("../router");
+const x402Routes_1 = require("./x402Routes");
+const apiRoutes_1 = require("./apiRoutes");
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
+/** x402 v2 client sends PAYMENT-SIGNATURE; v1 used X-PAYMENT — allow both for CORS preflight. */
+const corsOptions = {
+    origin: true,
+    credentials: true,
+    allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "PAYMENT-SIGNATURE",
+        "payment-signature",
+        "X-PAYMENT",
+        "x-payment",
+    ],
+};
+app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 app.post("/v1/agent/chat", async (req, res) => {
     const { userId, message, walletAddress, apiKey } = req.body;
@@ -62,11 +77,12 @@ app.post("/v1/agent/chat", async (req, res) => {
 app.get("/v1/health", (_req, res) => {
     res.json({ status: "ok", service: "arsweep-agent", version: "1.0.0" });
 });
-// ── x402 Premium Routes ───────────────────────────────────────────────────
-const x402Routes_1 = require("./x402Routes");
 app.get("/v1/x402/health", x402Routes_1.x402Health);
 app.post("/v1/x402/analyze", x402Routes_1.analyzeWallet);
 app.post("/v1/x402/report", x402Routes_1.sweepReport);
+app.post("/v1/x402/roast", x402Routes_1.walletRoast);
+app.post("/v1/x402/rugcheck", x402Routes_1.rugPullDetector);
+app.post("/v1/x402/planner", x402Routes_1.autoSweepPlanner);
 function attachWebSocket(server) {
     const wss = new ws_1.WebSocketServer({ server, path: "/ws" });
     wss.on("connection", (ws) => {
@@ -82,7 +98,12 @@ function attachWebSocket(server) {
             if (payload.type === "chat") {
                 ws.send(JSON.stringify({ type: "typing" }));
                 try {
-                    const result = await (0, router_1.handleMessage)({ platform: "web", userId: payload.userId, message: payload.message, walletAddress: payload.walletAddress });
+                    const result = await (0, router_1.handleMessage)({
+                        platform: "web",
+                        userId: payload.userId,
+                        message: payload.message,
+                        walletAddress: payload.walletAddress,
+                    });
                     ws.send(JSON.stringify({ type: "message", text: result.text, toolsUsed: result.toolsUsed }));
                 }
                 catch {
@@ -93,13 +114,6 @@ function attachWebSocket(server) {
     });
     console.log("[WS] WebSocket attached at /ws");
 }
-exports.default = app;
-// ── New x402 Premium Routes ───────────────────────────────────────────────
-const x402Routes_2 = require("./x402Routes");
-app.post("/v1/x402/roast", x402Routes_2.walletRoast);
-app.post("/v1/x402/rugcheck", x402Routes_2.rugPullDetector);
-app.post("/v1/x402/planner", x402Routes_2.autoSweepPlanner);
-// ── Payment Proxy Route ───────────────────────────────────────────────────
 const SIGNATURE_POLL_INTERVAL_MS = 1500;
 const SIGNATURE_POLL_TIMEOUT_MS = 90_000;
 async function waitForSignatureConfirmation(connection, signature, timeoutMs = SIGNATURE_POLL_TIMEOUT_MS) {
@@ -162,15 +176,13 @@ app.post("/v1/payment/usdc", async (req, res) => {
         return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
 });
-// ── Treasury Info (public, no sensitive data) ─────────────────────────────
 app.get("/v1/payment/info", (_req, res) => {
     res.json({
         treasury: process.env.TREASURY_WALLET,
         usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-        network: "solana-mainnet",
+        network: "solana",
     });
 });
-// ── x402 Discovery Document ───────────────────────────────────────────────
 app.get("/.well-known/x402.json", (_req, res) => {
     res.json({
         x402Version: 1,
@@ -181,57 +193,52 @@ app.get("/.well-known/x402.json", (_req, res) => {
                 resource: "https://api.arsweep.fun/v1/x402/analyze",
                 type: "http",
                 description: "Analyze a Solana wallet for dust tokens and sweep opportunities",
-                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }]
+                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
             },
             {
                 resource: "https://api.arsweep.fun/v1/x402/report",
                 type: "http",
                 description: "Get a full sweep report for a wallet",
-                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "2000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }]
+                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "2000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
             },
             {
                 resource: "https://api.arsweep.fun/v1/x402/roast",
                 type: "http",
                 description: "Roast a wallet's portfolio with AI humor",
-                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "500000", asset: "SOL", payTo: process.env.TREASURY_WALLET }]
+                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "500000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
             },
             {
                 resource: "https://api.arsweep.fun/v1/x402/rugcheck",
                 type: "http",
                 description: "Detect potential rug pull tokens in a wallet",
-                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }]
+                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
             },
             {
                 resource: "https://api.arsweep.fun/v1/x402/planner",
                 type: "http",
                 description: "Auto sweep planner - optimize dust sweep strategy",
-                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1500000", asset: "SOL", payTo: process.env.TREASURY_WALLET }]
-            }
-        ]
+                accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1500000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
+            },
+        ],
     });
 });
-// ── GET routes for x402scan discovery ────────────────────────────────────
-const x402Routes_3 = require("./x402Routes");
-app.get("/v1/x402/analyze", x402Routes_3.analyzeWalletGet);
-app.get("/v1/x402/report", x402Routes_3.sweepReportGet);
-app.get("/v1/x402/roast", x402Routes_3.walletRoastGet);
-app.get("/v1/x402/rugcheck", x402Routes_3.rugPullDetectorGet);
-app.get("/v1/x402/planner", x402Routes_3.autoSweepPlannerGet);
-// ── Corbits-compatible routes (no x402 logic) ────────────────────────────
-const apiRoutes_1 = require("./apiRoutes");
+app.get("/v1/x402/analyze", x402Routes_1.analyzeWalletGet);
+app.get("/v1/x402/report", x402Routes_1.sweepReportGet);
+app.get("/v1/x402/roast", x402Routes_1.walletRoastGet);
+app.get("/v1/x402/rugcheck", x402Routes_1.rugPullDetectorGet);
+app.get("/v1/x402/planner", x402Routes_1.autoSweepPlannerGet);
 app.post("/v1/api/analyze", apiRoutes_1.analyzeWalletFree);
 app.post("/v1/api/report", apiRoutes_1.sweepReportFree);
 app.post("/v1/api/roast", apiRoutes_1.walletRoastFree);
 app.post("/v1/api/rugcheck", apiRoutes_1.rugPullDetectorFree);
 app.post("/v1/api/planner", apiRoutes_1.autoSweepPlannerFree);
-// ── OpenAPI Discovery for x402scan ───────────────────────────────────────
 app.get("/openapi.json", (_req, res) => {
     res.json({
         openapi: "3.1.0",
         info: {
             title: "Arsweep AI Agent API",
             version: "1.0.0",
-            "x-guidance": "Arsweep is a Solana dust sweeper AI agent. Pay per request using USDC on Solana. Send walletAddress in the POST body to analyze, report, roast, rugcheck, or plan sweeps for any Solana wallet."
+            "x-guidance": "Arsweep is a Solana dust sweeper AI agent. Pay per request using USDC on Solana. Send walletAddress in the POST body to analyze, report, roast, rugcheck, or plan sweeps for any Solana wallet.",
         },
         paths: {
             "/v1/x402/analyze": {
@@ -244,19 +251,19 @@ app.get("/openapi.json", (_req, res) => {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        walletAddress: { type: "string", description: "Solana wallet address" }
+                                        walletAddress: { type: "string", description: "Solana wallet address" },
                                     },
-                                    required: ["walletAddress"]
-                                }
-                            }
-                        }
+                                    required: ["walletAddress"],
+                                },
+                            },
+                        },
                     },
                     responses: { "402": { description: "Payment Required" }, "200": { description: "OK" } },
                     "x-payment-info": {
                         price: { mode: "fixed", currency: "USD", amount: "0.10" },
-                        protocols: [{ "x402": {} }]
-                    }
-                }
+                        protocols: [{ "x402": {} }],
+                    },
+                },
             },
             "/v1/x402/report": {
                 post: {
@@ -268,19 +275,19 @@ app.get("/openapi.json", (_req, res) => {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        walletAddress: { type: "string", description: "Solana wallet address" }
+                                        walletAddress: { type: "string", description: "Solana wallet address" },
                                     },
-                                    required: ["walletAddress"]
-                                }
-                            }
-                        }
+                                    required: ["walletAddress"],
+                                },
+                            },
+                        },
                     },
                     responses: { "402": { description: "Payment Required" }, "200": { description: "OK" } },
                     "x-payment-info": {
                         price: { mode: "fixed", currency: "USD", amount: "0.05" },
-                        protocols: [{ "x402": {} }]
-                    }
-                }
+                        protocols: [{ "x402": {} }],
+                    },
+                },
             },
             "/v1/x402/roast": {
                 post: {
@@ -292,19 +299,19 @@ app.get("/openapi.json", (_req, res) => {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        walletAddress: { type: "string", description: "Solana wallet address" }
+                                        walletAddress: { type: "string", description: "Solana wallet address" },
                                     },
-                                    required: ["walletAddress"]
-                                }
-                            }
-                        }
+                                    required: ["walletAddress"],
+                                },
+                            },
+                        },
                     },
                     responses: { "402": { description: "Payment Required" }, "200": { description: "OK" } },
                     "x-payment-info": {
                         price: { mode: "fixed", currency: "USD", amount: "0.05" },
-                        protocols: [{ "x402": {} }]
-                    }
-                }
+                        protocols: [{ "x402": {} }],
+                    },
+                },
             },
             "/v1/x402/rugcheck": {
                 post: {
@@ -316,19 +323,19 @@ app.get("/openapi.json", (_req, res) => {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        walletAddress: { type: "string", description: "Solana wallet address" }
+                                        walletAddress: { type: "string", description: "Solana wallet address" },
                                     },
-                                    required: ["walletAddress"]
-                                }
-                            }
-                        }
+                                    required: ["walletAddress"],
+                                },
+                            },
+                        },
                     },
                     responses: { "402": { description: "Payment Required" }, "200": { description: "OK" } },
                     "x-payment-info": {
                         price: { mode: "fixed", currency: "USD", amount: "0.10" },
-                        protocols: [{ "x402": {} }]
-                    }
-                }
+                        protocols: [{ "x402": {} }],
+                    },
+                },
             },
             "/v1/x402/planner": {
                 post: {
@@ -340,20 +347,21 @@ app.get("/openapi.json", (_req, res) => {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        walletAddress: { type: "string", description: "Solana wallet address" }
+                                        walletAddress: { type: "string", description: "Solana wallet address" },
                                     },
-                                    required: ["walletAddress"]
-                                }
-                            }
-                        }
+                                    required: ["walletAddress"],
+                                },
+                            },
+                        },
                     },
                     responses: { "402": { description: "Payment Required" }, "200": { description: "OK" } },
                     "x-payment-info": {
                         price: { mode: "fixed", currency: "USD", amount: "0.05" },
-                        protocols: [{ "x402": {} }]
-                    }
-                }
-            }
-        }
+                        protocols: [{ "x402": {} }],
+                    },
+                },
+            },
+        },
     });
 });
+exports.default = app;

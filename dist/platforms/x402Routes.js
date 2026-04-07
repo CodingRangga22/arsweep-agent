@@ -59,26 +59,24 @@ const x402 = new X402PaymentHandler({
 async function handleX402(req, res, endpoint, amount, description, handler) {
     const resourceUrl = `${BASE_URL}${endpoint}`;
     const paymentHeader = x402.extractPayment(req.headers);
+    console.log("RAW paymentHeader:", JSON.stringify(paymentHeader?.substring(0, 50)));
     const paymentRequirements = await x402.createPaymentRequirements({
         amount,
         asset: { address: USDC_MINT, decimals: 6 },
         description,
     }, resourceUrl);
-    // No payment — return 402 (spec-compliant manual response)
+    // No payment — 402 body must include facilitator feePayer (x402-solana client requires extra.feePayer)
     if (!paymentHeader) {
         res.setHeader("WWW-Authenticate", 'X-402 realm="Arsweep API"');
         return res.status(402).json({
             x402Version: 1,
-            accepts: [{
-                    scheme: "exact",
-                    network: "eip155:8453",
+            accepts: [
+                {
+                    ...paymentRequirements,
                     maxAmountRequired: amount,
                     resource: resourceUrl,
                     description,
                     mimeType: "application/json",
-                    payTo: TREASURY_ADDRESS,
-                    maxTimeoutSeconds: 300,
-                    asset: USDC_MINT,
                     inputSchema: {
                         type: "object",
                         properties: {
@@ -98,13 +96,15 @@ async function handleX402(req, res, endpoint, amount, description, handler) {
                             recommendation: { type: "string" },
                         },
                     },
-                }],
+                },
+            ],
             error: "X-PAYMENT header is required",
         });
     }
     // Verify payment
     const verified = await x402.verifyPayment(paymentHeader, paymentRequirements);
     if (!verified.isValid) {
+        console.error("Payment verification failed:", JSON.stringify(verified));
         return res.status(402).json({ error: "Invalid payment", reason: verified.invalidReason });
     }
     // Execute business logic
@@ -197,7 +197,7 @@ async function x402Health(_req, res) {
             { path: "/v1/x402/report", price: "$0.05 USDC", description: "Wallet Sweep Report" },
         ],
         treasury: TREASURY_ADDRESS,
-        network: "solana-mainnet",
+        network: "solana",
         paymentProtocol: "x402-v2",
     });
 }

@@ -198,7 +198,7 @@ export async function x402Health(_req: Request, res: Response) {
       { path: "/v1/x402/report",  price: "$0.05 USDC", description: "Wallet Sweep Report" },
     ],
     treasury: TREASURY_ADDRESS,
-    network: "solana-mainnet",
+    network: "solana",
     paymentProtocol: "x402-v2",
   });
 }
