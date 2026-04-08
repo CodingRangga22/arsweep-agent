@@ -13,6 +13,7 @@ const express_2 = require("@x402/express");
 const server_1 = require("@x402/svm/exact/server");
 const server_2 = require("@x402/core/server");
 const facilitator_1 = require("@payai/facilitator");
+const paymentAgent_1 = require("./paymentAgent");
 const x402Routes_1 = require("./x402Routes");
 const apiRoutes_1 = require("./apiRoutes");
 (0, dotenv_1.config)();
@@ -45,61 +46,62 @@ const corsOptions = {
 app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 const TREASURY_WALLET = "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
+const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 // PayAI docs: use @payai/facilitator + x402 middleware (no custom payment logic).
 const facilitatorClient = new server_2.HTTPFacilitatorClient(facilitator_1.facilitator);
 app.use((0, express_2.paymentMiddleware)({
     "POST /v1/x402/analyze": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "AI Wallet Analysis",
         mimeType: "application/json",
     },
     "POST /v1/x402/report": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Sweep Report",
         mimeType: "application/json",
     },
     "POST /v1/x402/roast": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Roast",
         mimeType: "application/json",
     },
     "POST /v1/x402/rugcheck": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Rug Pull Detector",
         mimeType: "application/json",
     },
     "POST /v1/x402/planner": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Auto-Sweep Planner",
         mimeType: "application/json",
     },
     // GET variants (optional)
     "GET /v1/x402/analyze": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "AI Wallet Analysis",
         mimeType: "application/json",
     },
     "GET /v1/x402/report": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Sweep Report",
         mimeType: "application/json",
     },
     "GET /v1/x402/roast": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Wallet Roast",
         mimeType: "application/json",
     },
     "GET /v1/x402/rugcheck": {
-        accepts: [{ scheme: "exact", price: "$0.10", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.10", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Rug Pull Detector",
         mimeType: "application/json",
     },
     "GET /v1/x402/planner": {
-        accepts: [{ scheme: "exact", price: "$0.05", network: "solana", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", price: "$0.05", network: SOLANA_MAINNET_CAIP2, payTo: TREASURY_WALLET }],
         description: "Auto-Sweep Planner",
         mimeType: "application/json",
     },
-}, new express_2.x402ResourceServer(facilitatorClient).register("solana", new server_1.ExactSvmScheme())));
+}, new express_2.x402ResourceServer(facilitatorClient).register(SOLANA_MAINNET_CAIP2, new server_1.ExactSvmScheme())));
 app.post("/v1/agent/chat", async (req, res) => {
     const { userId, message, walletAddress, apiKey } = req.body;
     if (process.env.REQUIRE_API_KEY === "true" && apiKey !== process.env.ARSWEEP_API_KEY) {
@@ -124,6 +126,72 @@ app.post("/v1/x402/report", x402Routes_1.sweepReport);
 app.post("/v1/x402/roast", x402Routes_1.walletRoast);
 app.post("/v1/x402/rugcheck", x402Routes_1.rugPullDetector);
 app.post("/v1/x402/planner", x402Routes_1.autoSweepPlanner);
+// Premium proxy endpoints (frontend calls these, no x402 on the frontend)
+app.post("/v1/premium/analyze", async (req, res) => {
+    try {
+        const body = JSON.stringify(req.body ?? {});
+        const port = process.env.PORT ?? "3001";
+        const url = `http://127.0.0.1:${port}/v1/x402/analyze`;
+        const r = await (0, paymentAgent_1.callWithX402Payment)(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        const data = await r.json().catch(() => ({}));
+        res.status(r.status).json(data);
+    }
+    catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+});
+app.post("/v1/premium/report", async (req, res) => {
+    try {
+        const body = JSON.stringify(req.body ?? {});
+        const port = process.env.PORT ?? "3001";
+        const url = `http://127.0.0.1:${port}/v1/x402/report`;
+        const r = await (0, paymentAgent_1.callWithX402Payment)(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        const data = await r.json().catch(() => ({}));
+        res.status(r.status).json(data);
+    }
+    catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+});
+app.post("/v1/premium/roast", async (req, res) => {
+    try {
+        const body = JSON.stringify(req.body ?? {});
+        const port = process.env.PORT ?? "3001";
+        const url = `http://127.0.0.1:${port}/v1/x402/roast`;
+        const r = await (0, paymentAgent_1.callWithX402Payment)(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        const data = await r.json().catch(() => ({}));
+        res.status(r.status).json(data);
+    }
+    catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+});
+app.post("/v1/premium/rugcheck", async (req, res) => {
+    try {
+        const body = JSON.stringify(req.body ?? {});
+        const port = process.env.PORT ?? "3001";
+        const url = `http://127.0.0.1:${port}/v1/x402/rugcheck`;
+        const r = await (0, paymentAgent_1.callWithX402Payment)(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        const data = await r.json().catch(() => ({}));
+        res.status(r.status).json(data);
+    }
+    catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+});
+app.post("/v1/premium/planner", async (req, res) => {
+    try {
+        const body = JSON.stringify(req.body ?? {});
+        const port = process.env.PORT ?? "3001";
+        const url = `http://127.0.0.1:${port}/v1/x402/planner`;
+        const r = await (0, paymentAgent_1.callWithX402Payment)(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        const data = await r.json().catch(() => ({}));
+        res.status(r.status).json(data);
+    }
+    catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+});
 function attachWebSocket(server) {
     const wss = new ws_1.WebSocketServer({ server, path: "/ws" });
     wss.on("connection", (ws) => {
