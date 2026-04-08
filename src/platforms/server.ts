@@ -249,7 +249,7 @@ export function attachWebSocket(server: any) {
 
 app.get("/.well-known/x402.json", (_req, res) => {
   res.json({
-    x402Version: 1,
+    x402Version: 2,
     name: "Arsweep AI Agent",
     description: "AI-powered Solana wallet analyzer and dust sweeper",
     resources: [
@@ -257,31 +257,31 @@ app.get("/.well-known/x402.json", (_req, res) => {
         resource: "https://api.arsweep.fun/v1/x402/analyze",
         type: "http",
         description: "Analyze a Solana wallet for dust tokens and sweep opportunities",
-        accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "1000000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/report",
         type: "http",
         description: "Get a full sweep report for a wallet",
-        accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "2000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "2000000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/roast",
         type: "http",
         description: "Roast a wallet's portfolio with AI humor",
-        accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "500000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "500000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/rugcheck",
         type: "http",
         description: "Detect potential rug pull tokens in a wallet",
-        accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1000000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "1000000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/planner",
         type: "http",
         description: "Auto sweep planner - optimize dust sweep strategy",
-        accepts: [{ scheme: "exact", network: "solana:mainnet", amount: "1500000", asset: "SOL", payTo: process.env.TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "1500000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
       },
     ],
   });
