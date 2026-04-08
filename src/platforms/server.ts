@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import { handleMessage } from "../router";
+import { getConversationHistory } from "../agent/memory";
 import { config } from "dotenv";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
@@ -40,6 +41,8 @@ const corsOptions: cors.CorsOptions = {
   allowedHeaders: [
     "Content-Type",
     "Authorization",
+    "Accept",
+    "Accept-Language",
     "PAYMENT-REQUIRED",
     "payment-required",
     "PAYMENT-RESPONSE",
@@ -50,19 +53,29 @@ const corsOptions: cors.CorsOptions = {
     "x-payment",
     "X-Payment-Signature",
     "x-payment-signature",
+    "X-PAYMENT-RESPONSE",
+    "x-payment-response",
+    // @x402/fetch may set this on the request (should be stripped client-side; allow for older builds)
+    "Access-Control-Expose-Headers",
+    "access-control-expose-headers",
   ],
   exposedHeaders: [
     "PAYMENT-REQUIRED",
     "payment-required",
     "PAYMENT-RESPONSE",
     "payment-response",
+    "X-PAYMENT-RESPONSE",
+    "x-payment-response",
   ],
+  methods: ["GET", "HEAD", "POST", "OPTIONS"],
+  maxAge: 86400,
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 
-const TREASURY_WALLET = "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
+const TREASURY_WALLET =
+  process.env.TREASURY_WALLET?.trim() || "9wVfWxbWLpHwyxVVkBJkzjeabHkdfZG6zyraVoLLB7jv";
 const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 
 // PayAI docs: use @payai/facilitator + x402 middleware (no custom payment logic).
@@ -133,8 +146,31 @@ app.post("/v1/agent/chat", async (req, res) => {
   }
   if (!userId || !message) return res.status(400).json({ error: "userId and message required" });
   try {
-    const result = await handleMessage({ platform: "api", userId: String(userId), message, walletAddress });
-    res.json(result);
+    const result = await handleMessage({
+      platform: "web",
+      userId: String(userId),
+      message: String(message),
+      walletAddress: walletAddress != null ? String(walletAddress) : undefined,
+    });
+    res.json({ text: result.text, toolsUsed: result.toolsUsed });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/** Same user key as handleMessage + runAgent: `web:${userId}` */
+app.post("/v1/agent/history/:userId", async (req, res) => {
+  const raw = req.params.userId;
+  if (!raw) return res.status(400).json({ error: "userId required" });
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    /* use raw */
+  }
+  try {
+    const messages = await getConversationHistory(`web:${decoded}`);
+    res.json({ messages });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -158,8 +194,15 @@ app.post("/v1/premium/analyze", async (req, res) => {
     const port = process.env.PORT ?? "3001";
     const url = `http://127.0.0.1:${port}/v1/x402/analyze`;
     const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-    const data = await r.json().catch(() => ({}));
-    res.status(r.status).json(data);
+    forwardX402Headers(r, res);
+    const text = await r.text().catch(() => "");
+    if (!text) return res.sendStatus(r.status);
+    // Try JSON first, otherwise send raw text.
+    try {
+      return res.status(r.status).json(withX402Meta(JSON.parse(text), r));
+    } catch {
+      return res.status(r.status).type("text/plain").send(text);
+    }
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
@@ -171,8 +214,14 @@ app.post("/v1/premium/report", async (req, res) => {
     const port = process.env.PORT ?? "3001";
     const url = `http://127.0.0.1:${port}/v1/x402/report`;
     const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-    const data = await r.json().catch(() => ({}));
-    res.status(r.status).json(data);
+    forwardX402Headers(r, res);
+    const text = await r.text().catch(() => "");
+    if (!text) return res.sendStatus(r.status);
+    try {
+      return res.status(r.status).json(withX402Meta(JSON.parse(text), r));
+    } catch {
+      return res.status(r.status).type("text/plain").send(text);
+    }
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
@@ -184,8 +233,14 @@ app.post("/v1/premium/roast", async (req, res) => {
     const port = process.env.PORT ?? "3001";
     const url = `http://127.0.0.1:${port}/v1/x402/roast`;
     const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-    const data = await r.json().catch(() => ({}));
-    res.status(r.status).json(data);
+    forwardX402Headers(r, res);
+    const text = await r.text().catch(() => "");
+    if (!text) return res.sendStatus(r.status);
+    try {
+      return res.status(r.status).json(withX402Meta(JSON.parse(text), r));
+    } catch {
+      return res.status(r.status).type("text/plain").send(text);
+    }
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
@@ -197,8 +252,14 @@ app.post("/v1/premium/rugcheck", async (req, res) => {
     const port = process.env.PORT ?? "3001";
     const url = `http://127.0.0.1:${port}/v1/x402/rugcheck`;
     const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-    const data = await r.json().catch(() => ({}));
-    res.status(r.status).json(data);
+    forwardX402Headers(r, res);
+    const text = await r.text().catch(() => "");
+    if (!text) return res.sendStatus(r.status);
+    try {
+      return res.status(r.status).json(withX402Meta(JSON.parse(text), r));
+    } catch {
+      return res.status(r.status).type("text/plain").send(text);
+    }
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
@@ -210,8 +271,14 @@ app.post("/v1/premium/planner", async (req, res) => {
     const port = process.env.PORT ?? "3001";
     const url = `http://127.0.0.1:${port}/v1/x402/planner`;
     const r = await callWithX402Payment(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-    const data = await r.json().catch(() => ({}));
-    res.status(r.status).json(data);
+    forwardX402Headers(r, res);
+    const text = await r.text().catch(() => "");
+    if (!text) return res.sendStatus(r.status);
+    try {
+      return res.status(r.status).json(withX402Meta(JSON.parse(text), r));
+    } catch {
+      return res.status(r.status).type("text/plain").send(text);
+    }
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
@@ -249,6 +316,7 @@ export function attachWebSocket(server: any) {
 
 app.get("/.well-known/x402.json", (_req, res) => {
   res.json({
+    // x402 protocol is v2 (CAIP-2 networks) per PayAI reference.
     x402Version: 2,
     name: "Arsweep AI Agent",
     description: "AI-powered Solana wallet analyzer and dust sweeper",
@@ -257,31 +325,33 @@ app.get("/.well-known/x402.json", (_req, res) => {
         resource: "https://api.arsweep.fun/v1/x402/analyze",
         type: "http",
         description: "Analyze a Solana wallet for dust tokens and sweep opportunities",
-        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "100000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
+        // The authoritative payment requirements are served via the x402 middleware's 402 response.
+        // This discovery doc is kept consistent with the middleware config (CAIP-2 network + payTo).
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, price: "$0.10", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/report",
         type: "http",
         description: "Get a full sweep report for a wallet",
-        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "50000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, price: "$0.05", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/roast",
         type: "http",
         description: "Roast a wallet's portfolio with AI humor",
-        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "50000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, price: "$0.05", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/rugcheck",
         type: "http",
         description: "Detect potential rug pull tokens in a wallet",
-        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "100000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, price: "$0.10", payTo: TREASURY_WALLET }],
       },
       {
         resource: "https://api.arsweep.fun/v1/x402/planner",
         type: "http",
         description: "Auto sweep planner - optimize dust sweep strategy",
-        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, amount: "50000", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", payTo: TREASURY_WALLET }],
+        accepts: [{ scheme: "exact", network: SOLANA_MAINNET_CAIP2, price: "$0.05", payTo: TREASURY_WALLET }],
       },
     ],
   });
@@ -292,6 +362,34 @@ app.get("/v1/x402/report", sweepReportGet);
 app.get("/v1/x402/roast", walletRoastGet);
 app.get("/v1/x402/rugcheck", rugPullDetectorGet);
 app.get("/v1/x402/planner", autoSweepPlannerGet);
+
+function getFirstHeader(r: Response, names: string[]): string | undefined {
+  for (const n of names) {
+    const v = r.headers.get(n);
+    if (v) return v;
+  }
+  return undefined;
+}
+
+function forwardX402Headers(r: Response, res: express.Response) {
+  // Preserve x402 headers so clients can debug/handle 402 flows.
+  for (const name of ["payment-required", "payment-response", "x-payment-response", "payment-signature", "x-payment"]) {
+    const v = r.headers.get(name);
+    if (v) res.setHeader(name, v);
+    const vUpper = r.headers.get(name.toUpperCase());
+    if (vUpper) res.setHeader(name.toUpperCase(), vUpper);
+  }
+}
+
+function withX402Meta<T extends object>(data: T, r: Response): T & { paymentRequiredB64?: string; paymentResponseB64?: string } {
+  const paymentRequiredB64 = getFirstHeader(r, ["payment-required", "PAYMENT-REQUIRED"]);
+  const paymentResponseB64 = getFirstHeader(r, ["payment-response", "PAYMENT-RESPONSE", "x-payment-response", "X-PAYMENT-RESPONSE"]);
+  return {
+    ...data,
+    ...(paymentRequiredB64 ? { paymentRequiredB64 } : {}),
+    ...(paymentResponseB64 ? { paymentResponseB64 } : {}),
+  };
+}
 
 app.post("/v1/api/analyze", analyzeWalletFree);
 app.post("/v1/api/report", sweepReportFree);

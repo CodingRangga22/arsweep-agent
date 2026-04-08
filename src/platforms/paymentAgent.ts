@@ -1,9 +1,7 @@
 import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
-import { registerExactSvmScheme } from "@x402/svm/exact/client";
+import { ExactSvmScheme } from "@x402/svm/exact/client";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
 import { base58 } from "@scure/base";
-
-const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -20,8 +18,9 @@ export async function callWithX402Payment(url: string, init?: RequestInit): Prom
   const svmPrivateKey = requireEnv("SVM_PRIVATE_KEY"); // base58 private key bytes (PayAI docs)
   const signer = await createKeyPairSignerFromBytes(base58.decode(svmPrivateKey));
 
-  const client = new x402Client();
-  registerExactSvmScheme(client, { signer, networks: [SOLANA_MAINNET_CAIP2] as any });
+  // Match the @x402/fetch docs: register a Solana exact scheme for all Solana CAIP-2 networks.
+  // This ensures the client can select the right scheme from PAYMENT-REQUIRED.accepts.
+  const client = new x402Client().register("solana:*" as any, new ExactSvmScheme(signer as any) as any);
 
   const fetchWithPayment = wrapFetchWithPayment(fetch, client);
   return fetchWithPayment(url, init);
