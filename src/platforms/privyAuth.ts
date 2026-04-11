@@ -41,13 +41,18 @@ function getPrivyClient(): PrivyClient {
   if (!appId || !appSecret) {
     throw new Error("Missing PRIVY_APP_ID/PRIVY_APP_SECRET env vars");
   }
-  privyClient = new PrivyClient(appId, appSecret);
+  const jwtVerificationKey = process.env.PRIVY_JWT_VERIFICATION_KEY?.trim();
+  privyClient = new PrivyClient({
+    appId,
+    appSecret,
+    ...(jwtVerificationKey ? { jwtVerificationKey } : {}),
+  });
   return privyClient;
 }
 
 export async function verifyPrivyAccessToken(accessToken: string): Promise<VerifiedAccessTokenClaims> {
   const privy = getPrivyClient();
-  const verifiedClaims = await privy.verifyAuthToken(accessToken);
+  const verifiedClaims = await privy.utils().auth().verifyAccessToken(accessToken);
   return verifiedClaims as unknown as VerifiedAccessTokenClaims;
 }
 
