@@ -9,6 +9,7 @@ import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { facilitator } from "@payai/facilitator";
 import { callWithX402Payment } from "./paymentAgent";
+import { getPrivyClaims, requirePrivyAuth, verifyPrivyAccessToken } from "./privyAuth";
 import {
   analyzeWallet,
   sweepReport,
@@ -139,16 +140,19 @@ app.use(
   ),
 );
 
-app.post("/v1/agent/chat", async (req, res) => {
-  const { userId, message, walletAddress, apiKey } = req.body;
+app.post("/v1/agent/chat", requirePrivyAuth, async (req, res) => {
+  const { message, walletAddress, apiKey } = req.body;
   if (process.env.REQUIRE_API_KEY === "true" && apiKey !== process.env.ARSWEEP_API_KEY) {
     return res.status(401).json({ error: "Invalid API key" });
   }
-  if (!userId || !message) return res.status(400).json({ error: "userId and message required" });
+  if (!message) return res.status(400).json({ error: "message required" });
   try {
+    const privy = getPrivyClaims(req);
+    const resolvedUserId = privy?.userId ?? req.body?.userId; // fallback when REQUIRE_PRIVY_AUTH is off
+    if (!resolvedUserId) return res.status(400).json({ error: "userId required" });
     const result = await handleMessage({
       platform: "web",
-      userId: String(userId),
+      userId: String(resolvedUserId),
       message: String(message),
       walletAddress: walletAddress != null ? String(walletAddress) : undefined,
     });
@@ -159,17 +163,25 @@ app.post("/v1/agent/chat", async (req, res) => {
 });
 
 /** Same user key as handleMessage + runAgent: `web:${userId}` */
-app.post("/v1/agent/history/:userId", async (req, res) => {
-  const raw = req.params.userId;
-  if (!raw) return res.status(400).json({ error: "userId required" });
-  let decoded = raw;
+app.post("/v1/agent/history/:userId", requirePrivyAuth, async (req, res) => {
+  const privy = getPrivyClaims(req);
+  const resolvedUserId = privy?.userId ?? req.params.userId;
+  if (!resolvedUserId) return res.status(400).json({ error: "userId required" });
   try {
-    decoded = decodeURIComponent(raw);
-  } catch {
-    /* use raw */
+    const messages = await getConversationHistory(`web:${String(resolvedUserId)}`);
+    res.json({ messages });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+/** Preferred history endpoint when using Privy (userId inferred). */
+app.post("/v1/agent/history", requirePrivyAuth, async (req, res) => {
+  const privy = getPrivyClaims(req);
+  const resolvedUserId = privy?.userId ?? req.body?.userId;
+  if (!resolvedUserId) return res.status(400).json({ error: "userId required" });
   try {
-    const messages = await getConversationHistory(`web:${decoded}`);
+    const messages = await getConversationHistory(`web:${String(resolvedUserId)}`);
     res.json({ messages });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -298,6 +310,21 @@ export function attachWebSocket(server: any) {
       if (payload.type === "chat") {
         ws.send(JSON.stringify({ type: "typing" }));
         try {
+          if (process.env.REQUIRE_PRIVY_AUTH === "true") {
+            const accessToken = typeof payload.accessToken === "string" ? payload.accessToken : undefined;
+            if (!accessToken) {
+              ws.send(JSON.stringify({ type: "error", text: "Missing Privy access token." }));
+              return;
+            }
+            try {
+              const claims = await verifyPrivyAccessToken(accessToken);
+              payload.userId = claims.userId;
+            } catch {
+              ws.send(JSON.stringify({ type: "error", text: "Invalid Privy access token." }));
+              return;
+            }
+          }
+
           const result = await handleMessage({
             platform: "web",
             userId: payload.userId,
