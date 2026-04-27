@@ -558,4 +558,34 @@ app.get("/openapi.json", (_req, res) => {
   });
 });
 
+
+// Syra proxy — forward /syra/* to upstream Syra API
+app.all("/syra/:path(*)", async (req, res) => {
+  const upstream = process.env.SYRA_UPSTREAM ?? "https://api.syraa.fun";
+  const targetUrl = `${upstream}/syra/${req.params.path}${req.url.includes("?") ? "?" + req.url.split("?")[1] : ""}`;
+  try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    for (const h of ["authorization", "x-payment", "payment-signature", "payment-required", "payment-response"]) {
+      const v = req.headers[h];
+      if (v) headers[h] = Array.isArray(v) ? v[0] : v;
+    }
+    const fetchOpts: RequestInit = {
+      method: req.method,
+      headers,
+      ...(["POST", "PUT", "PATCH"].includes(req.method) ? { body: JSON.stringify(req.body) } : {}),
+    };
+    const r = await fetch(targetUrl, fetchOpts);
+    // Forward all response headers including x402 headers
+    r.headers.forEach((value, key) => {
+      if (!["content-encoding", "transfer-encoding", "connection"].includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+    const text = await r.text();
+    res.status(r.status).send(text);
+  } catch (e) {
+    res.status(502).json({ error: "Syra upstream unreachable", detail: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 export default app;
