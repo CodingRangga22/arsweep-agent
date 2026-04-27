@@ -563,7 +563,7 @@ app.get("/openapi.json", (_req, res) => {
 app.all("/syra/*", async (req, res) => {
   const upstream = process.env.SYRA_UPSTREAM ?? "https://api.syraa.fun";
   const subpath = (req.params as any)[0] ?? "";
-  const targetUrl = `${upstream}/syra/${subpath}${req.url.includes("?") ? "?" + req.url.split("?")[1] : ""}`;
+  const targetUrl = `${upstream}/${subpath}${req.url.includes("?") ? "?" + req.url.split("?")[1] : ""}`;
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     for (const h of ["authorization", "x-payment", "payment-signature", "payment-required", "payment-response"]) {
