@@ -1,0 +1,177 @@
+{
+  "$schema": "https://explorer.oobeprotocol.ai/docs",
+  "manifestVersion": "1.0.0",
+  "sapVersion": 2,
+  "name": "Arsweep Hygiene Agent",
+  "slug": "arsweep-hygiene",
+  "description": "AI-powered Solana wallet hygiene: scan dust SPL accounts, reclaim rent, swap dust via Jupiter, and premium wallet intelligence via x402 (Pay AI on Solana).",
+  "website": "https://arsweep.fun",
+  "appUrl": "https://arsweep.fun/agent",
+  "docsUrl": "https://arsweep.fun/docs",
+  "telegram": "https://t.me/ArsweepAI",
+  "tokenMint": "dTMaF2F97BWo6s416JqsDrpzdwa1uarKngSwf25pump",
+  "x402Endpoint": "https://api.arsweep.fun/.well-known/x402.json",
+  "apiBaseUrl": "https://api.arsweep.fun/v1",
+  "protocols": ["arsweep", "jupiter", "helius", "x402", "payai"],
+  "categories": ["wallet", "defi", "analytics"],
+  "capabilities": [
+    {
+      "id": "wallet:scan_dust",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Scan SPL / Token-2022 accounts, classify empty and low-value dust, estimate reclaimable rent (Helius DAS + eligibility engine)."
+    },
+    {
+      "id": "spl:close_empty",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Close empty token accounts and burn worthless dust (3-layer protection: no liquidity, zero USD value). User-signed, non-custodial."
+    },
+    {
+      "id": "jupiter:swap_dust",
+      "protocolId": "jupiter",
+      "version": "1.0.0",
+      "description": "Quote and swap dust token balances to SOL via Jupiter when liquidity exists."
+    },
+    {
+      "id": "ai:wallet_analyze",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Deep AI wallet analysis (Groq). Paid via x402 at POST /v1/x402/analyze."
+    },
+    {
+      "id": "ai:rugcheck",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Token rug-risk check (Syra + heuristics). Paid via x402 at POST /v1/x402/rugcheck."
+    },
+    {
+      "id": "ai:sweep_report",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Wallet sweep health report. Paid via x402 at POST /v1/x402/report."
+    },
+    {
+      "id": "ai:sweep_planner",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Auto sweep planner. Paid via x402 at POST /v1/x402/planner."
+    },
+    {
+      "id": "ai:wallet_roast",
+      "protocolId": "arsweep",
+      "version": "1.0.0",
+      "description": "Portfolio roast. Paid via x402 at POST /v1/x402/roast."
+    },
+    {
+      "id": "x402:micropay",
+      "protocolId": "x402",
+      "version": "2.0.0",
+      "description": "Micropayments on Solana mainnet (CAIP-2) via Pay AI facilitator; discovery at /.well-known/x402.json."
+    }
+  ],
+  "pricing": [
+    {
+      "tierId": "analyze",
+      "pricePerCall": 100000,
+      "rateLimit": 120,
+      "tokenType": "usdc",
+      "settlementMode": "x402",
+      "description": "$0.10 USDC per analyze call (6 decimals)"
+    },
+    {
+      "tierId": "rugcheck",
+      "pricePerCall": 100000,
+      "rateLimit": 120,
+      "tokenType": "usdc",
+      "settlementMode": "x402",
+      "description": "$0.10 USDC per rugcheck call"
+    },
+    {
+      "tierId": "report",
+      "pricePerCall": 50000,
+      "rateLimit": 120,
+      "tokenType": "usdc",
+      "settlementMode": "x402",
+      "description": "$0.05 USDC per report call"
+    },
+    {
+      "tierId": "planner",
+      "pricePerCall": 50000,
+      "rateLimit": 120,
+      "tokenType": "usdc",
+      "settlementMode": "x402",
+      "description": "$0.05 USDC per planner call"
+    },
+    {
+      "tierId": "roast",
+      "pricePerCall": 50000,
+      "rateLimit": 60,
+      "tokenType": "usdc",
+      "settlementMode": "x402",
+      "description": "$0.05 USDC per roast call"
+    }
+  ],
+  "tools": [
+    {
+      "name": "scan_dust",
+      "protocolId": "arsweep",
+      "description": "Scan wallet for dust SPL accounts (client-side + Helius)",
+      "category": "wallet",
+      "httpMethod": "post",
+      "endpoint": "https://arsweep.fun/app",
+      "paramsCount": 1,
+      "requiredParams": 1
+    },
+    {
+      "name": "close_empty_accounts",
+      "protocolId": "arsweep",
+      "description": "Build user-signed close/burn transaction batches",
+      "category": "wallet",
+      "httpMethod": "post",
+      "endpoint": "https://arsweep.fun/app",
+      "paramsCount": 2,
+      "requiredParams": 1
+    },
+    {
+      "name": "jupiter_swap_dust",
+      "protocolId": "jupiter",
+      "description": "Swap dust mint to SOL via Jupiter",
+      "category": "swap",
+      "httpMethod": "post",
+      "endpoint": "https://arsweep.fun/app",
+      "paramsCount": 3,
+      "requiredParams": 2
+    },
+    {
+      "name": "wallet_analyze",
+      "protocolId": "arsweep",
+      "description": "x402 AI wallet analysis",
+      "category": "analytics",
+      "httpMethod": "post",
+      "endpoint": "https://api.arsweep.fun/v1/x402/analyze",
+      "paramsCount": 1,
+      "requiredParams": 1
+    },
+    {
+      "name": "rugcheck",
+      "protocolId": "arsweep",
+      "description": "x402 rug risk check",
+      "category": "analytics",
+      "httpMethod": "post",
+      "endpoint": "https://api.arsweep.fun/v1/x402/rugcheck",
+      "paramsCount": 1,
+      "requiredParams": 1
+    },
+    {
+      "name": "agent_chat",
+      "protocolId": "arsweep",
+      "description": "Privy-authenticated agent chat (scan + sweep intent)",
+      "category": "wallet",
+      "httpMethod": "post",
+      "endpoint": "https://api.arsweep.fun/v1/agent/chat",
+      "paramsCount": 3,
+      "requiredParams": 1
+    }
+  ]
+}

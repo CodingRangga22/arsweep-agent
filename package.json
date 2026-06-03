@@ -5,9 +5,14 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "rm -rf dist && tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "sap:register": "tsx sap/register.ts",
+    "sap:register:dry": "tsx sap/register.ts --dry-run",
+    "sap:register:minimal": "tsx sap/register.ts --minimal"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@oobe-protocol-labs/synapse-sap-sdk": "^0.19.8",
     "@payai/facilitator": "^2.3.6",
     "@privy-io/node": "^0.12.0",
     "@solana/spl-token": "^0.4.9",

@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import fs from "node:fs";
+import path from "node:path";
 import { WebSocketServer } from "ws";
 import { handleMessage } from "../router";
 import { getConversationHistory } from "../agent/memory";
@@ -190,6 +192,18 @@ app.post("/v1/agent/history", requirePrivyAuth, async (req, res) => {
 
 app.get("/v1/health", (_req, res) => {
   res.json({ status: "ok", service: "arsweep-agent", version: "1.0.0" });
+});
+
+/** Synapse SAP manifest for OOBE Explorer / agent discovery */
+app.get("/v1/sap/manifest", (_req, res) => {
+  try {
+    const manifestPath = path.join(process.cwd(), "sap", "agent.manifest.json");
+    const raw = fs.readFileSync(manifestPath, "utf8");
+    res.setHeader("Content-Type", "application/json");
+    res.send(raw);
+  } catch {
+    res.status(404).json({ error: "SAP manifest not found" });
+  }
 });
 
 app.get("/v1/x402/health", x402Health);
