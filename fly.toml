@@ -1,7 +1,8 @@
 # Fly.io — arsweep-agent backend
 # https://fly.io/docs/reference/configuration/
 
-app = "arsweep-agent"
+# Nama harus unik di seluruh Fly.io (bukan hanya org Anda).
+app = "arsweep-api-codingrangga22"
 primary_region = "sin"
 
 [build]
