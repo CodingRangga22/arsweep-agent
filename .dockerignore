@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.env.*
+sap/keys
+.git
+*.md
+!sap/README.md
